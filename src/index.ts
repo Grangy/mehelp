@@ -57,6 +57,9 @@ async function initializeBot() {
   // Initialize context manager
   await contextManager.initialize();
 
+  // Load custom prompt into Gemini service
+  await geminiService.loadCustomPrompt();
+
   // Bot commands and handlers
   const commands = {
     start: '/start - Начать поддержку',

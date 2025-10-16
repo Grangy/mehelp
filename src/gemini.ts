@@ -15,6 +15,7 @@ export interface GeminiResponse {
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
+  private customPrompt: any = {};
 
   constructor() {
     this.genAI = new GoogleGenerativeAI(config.gemini.apiKey);
@@ -25,6 +26,27 @@ export class GeminiService {
         temperature: config.gemini.temperature,
       },
     });
+  }
+
+  async loadCustomPrompt(): Promise<void> {
+    try {
+      const fs = await import('fs/promises');
+      const promptData = await fs.readFile('./src/prompt.json', 'utf-8');
+      this.customPrompt = JSON.parse(promptData);
+      logger.info('Custom prompt loaded successfully', { 
+        persona: this.customPrompt.persona?.substring(0, 100) + '...',
+        tone: this.customPrompt.tone,
+        instructionsCount: this.customPrompt.system_instructions?.length || 0
+      });
+    } catch (error) {
+      logger.warn('Could not load custom prompt, using defaults');
+      this.customPrompt = {
+        persona: 'Ты — дружелюбный и умный AI-помощник. Помни контекст разговора и будь полезным.',
+        tone: 'дружелюбный, экспертный, спокойный',
+        style: 'на русском языке, без лишней воды',
+        system_instructions: []
+      };
+    }
   }
 
   async generateResponse(
@@ -104,9 +126,23 @@ export class GeminiService {
   private prepareConversationHistory(messages: ChatMessage[], userMemory?: any): any[] {
     const history: any[] = [];
     
-    // Add system message with user memory if available
-    let systemMessage = 'Ты — дружелюбный и умный AI-помощник. Помни контекст разговора и будь полезным.';
+    // Build system message from custom prompt
+    let systemMessage = this.customPrompt.persona || 'Ты — дружелюбный и умный AI-помощник. Помни контекст разговора и будь полезным.';
     
+    // Add tone and style if available
+    if (this.customPrompt.tone) {
+      systemMessage += `\n\nТон общения: ${this.customPrompt.tone}`;
+    }
+    if (this.customPrompt.style) {
+      systemMessage += `\n\nСтиль: ${this.customPrompt.style}`;
+    }
+    
+    // Add system instructions if available
+    if (this.customPrompt.system_instructions && this.customPrompt.system_instructions.length > 0) {
+      systemMessage += '\n\nДополнительные инструкции:\n' + this.customPrompt.system_instructions.join('\n');
+    }
+    
+    // Add user memory if available
     if (userMemory && config.bot.enableUserMemory) {
       const memoryContext = this.buildMemoryContext(userMemory);
       if (memoryContext) {
