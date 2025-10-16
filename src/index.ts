@@ -15,8 +15,24 @@ function cleanMarkdownText(text: string): string {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
     .replace(/#{1,6}\s*/g, '')     // Remove headers
     .replace(/\n{3,}/g, '\n\n')    // Limit multiple newlines
-    .replace(/[^\w\s\.,!?;:()\-'"]/g, '') // Remove special characters
+    .replace(/[<>]/g, '')         // Remove only angle brackets that cause issues
     .trim();
+}
+
+// Function to safely send message with fallback
+async function safeSendMessage(bot: TelegramBot, chatId: number, text: string, options: any = {}) {
+  try {
+    // Try to send with Markdown first
+    await bot.sendMessage(chatId, text, { ...options, parse_mode: 'Markdown' });
+  } catch (error) {
+    // If Markdown fails, send without it
+    try {
+      await bot.sendMessage(chatId, cleanMarkdownText(text), options);
+    } catch (fallbackError) {
+      // If even clean text fails, send as plain text
+      await bot.sendMessage(chatId, text.replace(/[^\w\s\.,!?;:()\-'"\n]/g, ''), options);
+    }
+  }
 }
 
 // Initialize bot function
@@ -66,7 +82,7 @@ async function initializeBot() {
       const welcomeMessage = customPrompt.response_templates?.greeting || 
         'Привет, Максим 🌿 Я рад, что ты здесь. Как ты себя чувствуешь сегодня?';
       
-      await bot.sendMessage(chatId, cleanMarkdownText(welcomeMessage), {
+      await safeSendMessage(bot, chatId, welcomeMessage, {
         reply_markup: {
           inline_keyboard: [
             [
@@ -118,7 +134,7 @@ ${Object.values(commands).join('\n')}
 *Важно:* Я не заменяю врача, но всегда готов поддержать тебя 🙏
     `;
     
-    await bot.sendMessage(chatId, cleanMarkdownText(helpText));
+    await safeSendMessage(bot, chatId, helpText);
     logCommand(userId, 'help');
   });
 
@@ -185,7 +201,7 @@ ${Object.values(commands).join('\n')}
         Object.entries(memory.preferences).map(([k, v]) => `${k}: ${v}`).join(', ') : 'не указаны'}
       `;
       
-      await bot.sendMessage(chatId, cleanMarkdownText(memoryText));
+      await safeSendMessage(bot, chatId, memoryText);
       logCommand(userId, 'memory');
     } catch (error) {
       logError(error as Error, 'memory command');
@@ -211,7 +227,7 @@ ${Object.values(commands).join('\n')}
 🕒 Последний сброс: ${new Date(stats.lastReset).toLocaleString('ru-RU')}
       `;
       
-      await bot.sendMessage(chatId, cleanMarkdownText(statsText));
+      await safeSendMessage(bot, chatId, statsText);
       logCommand(userId, 'stats');
     } catch (error) {
       logError(error as Error, 'stats command');
@@ -263,9 +279,8 @@ ${Object.values(commands).join('\n')}
         timestamp: Date.now(),
       });
       
-      // Clean and send response
-      const cleanText = cleanMarkdownText(response.text);
-      await bot.sendMessage(chatId, cleanText, { 
+      // Send response safely
+      await safeSendMessage(bot, chatId, response.text, { 
         reply_markup: {
           inline_keyboard: [
             [
@@ -329,8 +344,7 @@ ${Object.values(commands).join('\n')}
       });
       
       // Send analysis
-      const cleanAnalysis = cleanMarkdownText(analysis);
-      await bot.sendMessage(chatId, `🖼️ Анализ изображения:\n\n${cleanAnalysis}`);
+      await safeSendMessage(bot, chatId, `🖼️ Анализ изображения:\n\n${analysis}`);
       
       logBotResponse(userId, analysis, 0);
       
