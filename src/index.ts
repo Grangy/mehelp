@@ -5,6 +5,20 @@ import { contextManager } from './utils/context';
 import { logger, logUserMessage, logBotResponse, logError, logCommand } from './utils/logger';
 import fs from 'fs/promises';
 
+// Function to clean Markdown text for Telegram
+function cleanMarkdownText(text: string): string {
+  // Remove problematic Markdown characters that cause parsing errors
+  return text
+    .replace(/\*([^*]+)\*/g, '$1') // Remove bold markers
+    .replace(/_([^_]+)_/g, '$1')   // Remove italic markers
+    .replace(/`([^`]+)`/g, '$1')   // Remove code markers
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+    .replace(/#{1,6}\s*/g, '')     // Remove headers
+    .replace(/\n{3,}/g, '\n\n')    // Limit multiple newlines
+    .replace(/[^\w\s\.,!?;:()\-'"]/g, '') // Remove special characters
+    .trim();
+}
+
 // Initialize bot function
 async function initializeBot() {
   // Validate configuration
@@ -52,8 +66,7 @@ async function initializeBot() {
       const welcomeMessage = customPrompt.response_templates?.greeting || 
         'Привет, Максим 🌿 Я рад, что ты здесь. Как ты себя чувствуешь сегодня?';
       
-      await bot.sendMessage(chatId, welcomeMessage, {
-        parse_mode: 'Markdown',
+      await bot.sendMessage(chatId, cleanMarkdownText(welcomeMessage), {
         reply_markup: {
           inline_keyboard: [
             [
@@ -105,7 +118,7 @@ ${Object.values(commands).join('\n')}
 *Важно:* Я не заменяю врача, но всегда готов поддержать тебя 🙏
     `;
     
-    await bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, cleanMarkdownText(helpText));
     logCommand(userId, 'help');
   });
 
@@ -139,9 +152,7 @@ ${Object.values(commands).join('\n')}
         communicationStyle: persona
       });
       
-      await bot.sendMessage(chatId, `✅ Роль изменена на: *${persona}*`, { 
-        parse_mode: 'Markdown' 
-      });
+      await bot.sendMessage(chatId, `✅ Роль изменена на: ${persona}`);
       logCommand(userId, 'persona', [persona]);
     } catch (error) {
       logError(error as Error, 'persona command');
@@ -165,16 +176,16 @@ ${Object.values(commands).join('\n')}
       }
       
       const memoryText = `
-🧠 *Ваша память:*
+🧠 Ваша память:
 
-*Интересы:* ${memory.interests.length > 0 ? memory.interests.join(', ') : 'не указаны'}
-*Цели:* ${memory.goals.length > 0 ? memory.goals.join(', ') : 'не указаны'}
-*Стиль общения:* ${memory.communicationStyle}
-*Предпочтения:* ${Object.keys(memory.preferences).length > 0 ? 
+Интересы: ${memory.interests.length > 0 ? memory.interests.join(', ') : 'не указаны'}
+Цели: ${memory.goals.length > 0 ? memory.goals.join(', ') : 'не указаны'}
+Стиль общения: ${memory.communicationStyle}
+Предпочтения: ${Object.keys(memory.preferences).length > 0 ? 
         Object.entries(memory.preferences).map(([k, v]) => `${k}: ${v}`).join(', ') : 'не указаны'}
       `;
       
-      await bot.sendMessage(chatId, memoryText, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, cleanMarkdownText(memoryText));
       logCommand(userId, 'memory');
     } catch (error) {
       logError(error as Error, 'memory command');
@@ -193,14 +204,14 @@ ${Object.values(commands).join('\n')}
       const stats = await contextManager.getStatistics();
       
       const statsText = `
-📊 *Статистика бота:*
+📊 Статистика бота:
 
 👥 Всего пользователей: ${stats.totalUsers}
 💬 Всего сообщений: ${stats.totalMessages}
 🕒 Последний сброс: ${new Date(stats.lastReset).toLocaleString('ru-RU')}
       `;
       
-      await bot.sendMessage(chatId, statsText, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, cleanMarkdownText(statsText));
       logCommand(userId, 'stats');
     } catch (error) {
       logError(error as Error, 'stats command');
@@ -252,10 +263,9 @@ ${Object.values(commands).join('\n')}
         timestamp: Date.now(),
       });
       
-      // Send response with Markdown support
-      const parseMode = config.bot.enableMarkdown ? 'Markdown' : undefined;
-      await bot.sendMessage(chatId, response.text, { 
-        parse_mode: parseMode,
+      // Clean and send response
+      const cleanText = cleanMarkdownText(response.text);
+      await bot.sendMessage(chatId, cleanText, { 
         reply_markup: {
           inline_keyboard: [
             [
@@ -319,9 +329,8 @@ ${Object.values(commands).join('\n')}
       });
       
       // Send analysis
-      await bot.sendMessage(chatId, `🖼️ *Анализ изображения:*\n\n${analysis}`, {
-        parse_mode: 'Markdown'
-      });
+      const cleanAnalysis = cleanMarkdownText(analysis);
+      await bot.sendMessage(chatId, `🖼️ Анализ изображения:\n\n${cleanAnalysis}`);
       
       logBotResponse(userId, analysis, 0);
       
